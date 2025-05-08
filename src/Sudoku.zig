@@ -2,6 +2,7 @@ const std = @import("std");
 
 pub const Sudoku = struct {
     board: [9][9]u8,
+    candidates: [9][9]u9,
 
     pub fn parse(input: []const u8) !Sudoku {
         var sudoku: Sudoku = undefined;
@@ -41,6 +42,10 @@ pub const Sudoku = struct {
             }
         }
         try writer.print("\n-------------\n", .{});
+    }
+
+    pub fn countCandidate(sudoku: *Sudoku, i: usize, j: usize) u8 {
+        return @popCount(sudoku.candidates[i][j]);
     }
 
     pub fn findCandidates(sudoku: *Sudoku, i: usize, j: usize) ?u9 {
@@ -93,7 +98,20 @@ pub const Sudoku = struct {
         return ~mask;
     }
 
-    // fn solve(sudoku: *Sudoku) []const u8 {
-    //     const candidates: [9][9]u9 = undefined;
-    // }
+    fn updateAllCandidate(sudoku: *Sudoku) [9][9]u9 {
+        for (&sudoku.candidates, 0..) |*line, i| {
+            line: for (line, 0..) |*cell, j| {
+                if (cell.* == 0) {
+                    continue :line;
+                }
+                cell.* = sudoku.findCandidates(i, j) orelse 0;
+            }
+        }
+        return sudoku.candidates;
+    }
+
+    pub fn solve(sudoku: *Sudoku) []const u8 {
+        _ = sudoku.updateAllCandidate();
+        return "ans";
+    }
 };

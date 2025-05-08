@@ -13,4 +13,7 @@ pub fn main() !void {
     const j: usize = try std.fmt.parseInt(usize, args[2], 10);
 
     std.debug.print("({d},{d}):{b:0>9}\n", .{ i, j, sudoku.findCandidates(i, j).? });
+    std.debug.print("({d},{d}):count: {d}\n", .{ i, j, sudoku.countCandidate(i, j) });
+
+    _ = sudoku.solve();
 }
