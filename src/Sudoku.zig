@@ -1,8 +1,7 @@
 const std = @import("std");
 const IntegerBitSet = std.bit_set.IntegerBitSet;
 
-const FILLED_CANDIDATE = 0b0000000001;
-const CandidateSet = IntegerBitSet(10);
+const CandidateSet = IntegerBitSet(9);
 const CandidatePos = struct {
     candidate: CandidateSet,
     i: u4,
@@ -53,7 +52,7 @@ pub const Sudoku = struct {
         try writer.print("\n-------------\n", .{});
     }
 
-    pub fn findMostConstrainedCell(sudoku: *Sudoku) ?CandidatePos {
+    pub fn findMostConstrainedCell(sudoku: *Sudoku) !?CandidatePos {
         var candidate: ?CandidateSet = null;
         var i_pos: ?u4 = null;
         var j_pos: ?u4 = null;
@@ -61,6 +60,9 @@ pub const Sudoku = struct {
             for (line, 0..) |cell, j| {
                 if (sudoku.board[i][j] != 0) {
                     continue;
+                }
+                if (cell.count() == 0) {
+                    return error.NoCandidate;
                 }
                 if (cell.count() == 1) {
                     return .{
@@ -88,9 +90,9 @@ pub const Sudoku = struct {
         return .{ .candidate = candidate.?, .i = i_pos.?, .j = j_pos.? };
     }
 
-    pub fn findCandidates(sudoku: *Sudoku, i: usize, j: usize) u10 {
+    pub fn findCandidates(sudoku: *Sudoku, i: usize, j: usize) ?u9 {
         if (sudoku.board[i][j] != 0) {
-            return FILLED_CANDIDATE;
+            return null;
         }
         const box_i = (i / 3) * 3;
         const box_j = (j / 3) * 3;
@@ -128,12 +130,12 @@ pub const Sudoku = struct {
             sudoku.board[box_i + 2][box_j + 1],
             sudoku.board[box_i + 2][box_j + 2],
         };
-        var mask: u10 = 0;
+        var mask: u9 = 0;
         for (values, 0..) |value, index| {
             if (value == 0 or std.mem.indexOfScalar(u8, &values, value) != index) {
                 continue;
             }
-            mask += @as(u10, 1) << @intCast(value);
+            mask += @as(u9, 1) << @intCast(value - 1);
         }
         return ~mask;
     }
@@ -174,18 +176,16 @@ pub const Sudoku = struct {
             const i = pos[0];
             const j = pos[1];
             if (sudoku.board[i][j] == 0) {
-                sudoku.candidates[i][j].mask = sudoku.findCandidates(i, j);
-                sudoku.candidates[i][j].unset(0);
+                sudoku.candidates[i][j].mask = sudoku.findCandidates(i, j).?;
             }
         }
     }
 
     fn updateAllCandidate(sudoku: *Sudoku) void {
-        for (&sudoku.candidates, sudoku.board, 0..) |*line, bline, i| {
-            for (line, bline, 0..) |*cell, bcell, j| {
-                if (bcell == 0) {
-                    cell.*.mask = sudoku.findCandidates(i, j);
-                    sudoku.candidates[i][j].unset(0);
+        for (&sudoku.candidates, 0..) |*line, i| {
+            for (line, 0..) |*cell, j| {
+                if (sudoku.board[i][j] == 0) {
+                    cell.*.mask = sudoku.findCandidates(i, j).?;
                 }
             }
         }
@@ -193,9 +193,9 @@ pub const Sudoku = struct {
 
     pub fn solve(sudoku: *Sudoku) ![]const u8 {
         sudoku.updateAllCandidate();
-        while (sudoku.findMostConstrainedCell()) |res| {
+        while (try sudoku.findMostConstrainedCell()) |res| {
             if (res.candidate.count() == 1) {
-                sudoku.board[res.i][res.j] = std.math.log2_int(u10, res.candidate.mask);
+                sudoku.board[res.i][res.j] = std.math.log2_int(u9, res.candidate.mask) + 1;
                 sudoku.updateRelativeCandidate(res.i, res.j);
             } else {
                 // TODO: resolve multi candidates
