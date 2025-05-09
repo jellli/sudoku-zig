@@ -59,7 +59,7 @@ pub const Sudoku = struct {
         var j_pos: ?u4 = null;
         for (sudoku.candidates, 0..) |line, i| {
             for (line, 0..) |cell, j| {
-                if (cell.isSet(0)) {
+                if (sudoku.board[i][j] != 0) {
                     continue;
                 }
                 if (cell.count() == 1) {
@@ -138,12 +138,54 @@ pub const Sudoku = struct {
         return ~mask;
     }
 
+    fn updateRelativeCandidate(sudoku: *Sudoku, c_i: u4, c_j: u4) void {
+        const box_i = (c_i / 3) * 3;
+        const box_j = (c_j / 3) * 3;
+        const pos_list = [9 + 9 + 9]struct { u4, u4 }{
+            .{ c_i, 0 },
+            .{ c_i, 1 },
+            .{ c_i, 2 },
+            .{ c_i, 3 },
+            .{ c_i, 4 },
+            .{ c_i, 5 },
+            .{ c_i, 6 },
+            .{ c_i, 7 },
+            .{ c_i, 8 },
+            .{ 0, c_j },
+            .{ 1, c_j },
+            .{ 2, c_j },
+            .{ 3, c_j },
+            .{ 4, c_j },
+            .{ 5, c_j },
+            .{ 6, c_j },
+            .{ 7, c_j },
+            .{ 8, c_j },
+            .{ box_i, box_j },
+            .{ box_i, box_j + 1 },
+            .{ box_i, box_j + 2 },
+            .{ box_i + 1, box_j },
+            .{ box_i + 1, box_j + 1 },
+            .{ box_i + 1, box_j + 2 },
+            .{ box_i + 2, box_j },
+            .{ box_i + 2, box_j + 1 },
+            .{ box_i + 2, box_j + 2 },
+        };
+        for (pos_list) |pos| {
+            const i = pos[0];
+            const j = pos[1];
+            if (sudoku.board[i][j] == 0) {
+                sudoku.candidates[i][j].mask = sudoku.findCandidates(i, j);
+                sudoku.candidates[i][j].unset(0);
+            }
+        }
+    }
+
     fn updateAllCandidate(sudoku: *Sudoku) void {
-        for (&sudoku.candidates, 0..) |*line, i| {
-            for (line, 0..) |*cell, j| {
-                if (!cell.*.isSet(0)) {
+        for (&sudoku.candidates, sudoku.board, 0..) |*line, bline, i| {
+            for (line, bline, 0..) |*cell, bcell, j| {
+                if (bcell == 0) {
                     cell.*.mask = sudoku.findCandidates(i, j);
-                    cell.*.unset(0);
+                    sudoku.candidates[i][j].unset(0);
                 }
             }
         }
@@ -154,8 +196,7 @@ pub const Sudoku = struct {
         while (sudoku.findMostConstrainedCell()) |res| {
             if (res.candidate.count() == 1) {
                 sudoku.board[res.i][res.j] = std.math.log2_int(u10, res.candidate.mask);
-                sudoku.candidates[res.i][res.j].set(0);
-                sudoku.updateAllCandidate();
+                sudoku.updateRelativeCandidate(res.i, res.j);
             } else {
                 // TODO: resolve multi candidates
                 break;
