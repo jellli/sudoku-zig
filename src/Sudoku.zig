@@ -1,15 +1,17 @@
 const std = @import("std");
+const IntegerBitSet = std.bit_set.IntegerBitSet;
 
-const CandidateSet = u9;
+const FILLED_CANDIDATE = 0b0000000001;
+const CandidateSet = IntegerBitSet(10);
 const CandidatePos = struct {
     candidate: CandidateSet,
-    i: usize,
-    j: usize,
+    i: u4,
+    j: u4,
 };
 
 pub const Sudoku = struct {
-    board: [9][9]u8,
-    candidates: [9][9]?CandidateSet,
+    board: [9][9]u4,
+    candidates: [9][9]CandidateSet,
 
     pub fn parse(input: []const u8) !Sudoku {
         var sudoku: Sudoku = undefined;
@@ -21,7 +23,7 @@ pub const Sudoku = struct {
             '0'...'9' => {
                 const i: usize = index / 9;
                 const j: usize = index % 9;
-                sudoku.board[i][j] = value - '0';
+                sudoku.board[i][j] = @intCast(value - '0');
             },
             else => return error.InvalidBytes,
         };
@@ -53,29 +55,30 @@ pub const Sudoku = struct {
 
     pub fn findMostConstrainedCell(sudoku: *Sudoku) ?CandidatePos {
         var candidate: ?CandidateSet = null;
-        var i_pos: ?usize = null;
-        var j_pos: ?usize = null;
+        var i_pos: ?u4 = null;
+        var j_pos: ?u4 = null;
         for (sudoku.candidates, 0..) |line, i| {
             for (line, 0..) |cell, j| {
-                if (cell) |nn_cell| {
-                    if (@popCount(nn_cell) == 1) {
-                        return .{
-                            .candidate = nn_cell,
-                            .i = i,
-                            .j = j,
-                        };
+                if (cell.isSet(0)) {
+                    continue;
+                }
+                if (cell.count() == 1) {
+                    return .{
+                        .candidate = cell,
+                        .i = @truncate(i),
+                        .j = @truncate(j),
+                    };
+                }
+                if (candidate) |nn_candidate| {
+                    if (cell.count() < nn_candidate.count()) {
+                        candidate = cell;
+                        i_pos = @truncate(i);
+                        j_pos = @truncate(j);
                     }
-                    if (candidate) |nn_candidate| {
-                        if (@popCount(nn_cell) < @popCount(nn_candidate)) {
-                            candidate = nn_cell;
-                            i_pos = i;
-                            j_pos = j;
-                        }
-                    } else {
-                        candidate = nn_cell;
-                        i_pos = i;
-                        j_pos = j;
-                    }
+                } else {
+                    candidate = cell;
+                    i_pos = @truncate(i);
+                    j_pos = @truncate(j);
                 }
             }
         }
@@ -85,9 +88,9 @@ pub const Sudoku = struct {
         return .{ .candidate = candidate.?, .i = i_pos.?, .j = j_pos.? };
     }
 
-    pub fn findCandidates(sudoku: *Sudoku, i: usize, j: usize) ?CandidateSet {
+    pub fn findCandidates(sudoku: *Sudoku, i: usize, j: usize) u10 {
         if (sudoku.board[i][j] != 0) {
-            return null;
+            return FILLED_CANDIDATE;
         }
         const box_i = (i / 3) * 3;
         const box_j = (j / 3) * 3;
@@ -125,42 +128,39 @@ pub const Sudoku = struct {
             sudoku.board[box_i + 2][box_j + 1],
             sudoku.board[box_i + 2][box_j + 2],
         };
-        var mask: u9 = 0b000000000;
+        var mask: u10 = 0;
         for (values, 0..) |value, index| {
             if (value == 0 or std.mem.indexOfScalar(u8, &values, value) != index) {
                 continue;
             }
-            mask += (@as(u9, 1) << @intCast(value - 1));
+            mask += @as(u10, 1) << @intCast(value);
         }
         return ~mask;
     }
 
-    fn updateAllCandidate(sudoku: *Sudoku) [9][9]?CandidateSet {
+    fn updateAllCandidate(sudoku: *Sudoku) void {
         for (&sudoku.candidates, 0..) |*line, i| {
-            line: for (line, 0..) |*cell, j| {
-                if (cell.* == null) {
-                    continue :line;
+            for (line, 0..) |*cell, j| {
+                if (!cell.*.isSet(0)) {
+                    cell.*.mask = sudoku.findCandidates(i, j);
+                    cell.*.unset(0);
                 }
-                cell.* = sudoku.findCandidates(i, j) orelse null;
             }
         }
-        return sudoku.candidates;
     }
 
     pub fn solve(sudoku: *Sudoku) ![]const u8 {
-        _ = sudoku.updateAllCandidate();
+        sudoku.updateAllCandidate();
         while (sudoku.findMostConstrainedCell()) |res| {
-            if (@popCount(res.candidate) == 1) {
-                sudoku.board[res.i][res.j] = std.math.log2_int(u9, res.candidate) + 1;
-                sudoku.candidates[res.i][res.j] = null;
-                _ = sudoku.updateAllCandidate();
+            if (res.candidate.count() == 1) {
+                sudoku.board[res.i][res.j] = std.math.log2_int(u10, res.candidate.mask);
+                sudoku.candidates[res.i][res.j].set(0);
+                sudoku.updateAllCandidate();
             } else {
                 // TODO: resolve multi candidates
                 break;
             }
         }
-        std.debug.print("res:", .{});
-        try sudoku.display();
         return "ans";
     }
 };
