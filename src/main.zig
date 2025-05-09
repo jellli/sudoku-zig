@@ -7,13 +7,15 @@ pub fn main() !void {
     defer std.process.argsFree(allocator, args);
 
     var sudoku = try Sudoku.parse("001700509573024106800501002700295018009400305652800007465080071000159004908007053");
+    std.debug.print("input:", .{});
     try sudoku.display();
 
-    const i: usize = try std.fmt.parseInt(usize, args[1], 10);
-    const j: usize = try std.fmt.parseInt(usize, args[2], 10);
+    var timer = try std.time.Timer.start();
+    const start = timer.lap();
 
-    std.debug.print("({d},{d}):{b:0>9}\n", .{ i, j, sudoku.findCandidates(i, j).? });
-    std.debug.print("({d},{d}):count: {d}\n", .{ i, j, sudoku.countCandidate(i, j) });
+    _ = try sudoku.solve();
 
-    _ = sudoku.solve();
+    const end = timer.read();
+    const elapsed_ns = end - start;
+    std.debug.print("cost: {d:.3} ms\n", .{@as(f64, @floatFromInt(elapsed_ns)) / 1_000_000.0});
 }

@@ -1,8 +1,15 @@
 const std = @import("std");
 
+const CandidateSet = u9;
+const CandidatePos = struct {
+    candidate: CandidateSet,
+    i: usize,
+    j: usize,
+};
+
 pub const Sudoku = struct {
     board: [9][9]u8,
-    candidates: [9][9]u9,
+    candidates: [9][9]?CandidateSet,
 
     pub fn parse(input: []const u8) !Sudoku {
         var sudoku: Sudoku = undefined;
@@ -44,11 +51,41 @@ pub const Sudoku = struct {
         try writer.print("\n-------------\n", .{});
     }
 
-    pub fn countCandidate(sudoku: *Sudoku, i: usize, j: usize) u8 {
-        return @popCount(sudoku.candidates[i][j]);
+    pub fn findMostConstrainedCell(sudoku: *Sudoku) ?CandidatePos {
+        var candidate: ?CandidateSet = null;
+        var i_pos: ?usize = null;
+        var j_pos: ?usize = null;
+        for (sudoku.candidates, 0..) |line, i| {
+            for (line, 0..) |cell, j| {
+                if (cell) |nn_cell| {
+                    if (@popCount(nn_cell) == 1) {
+                        return .{
+                            .candidate = nn_cell,
+                            .i = i,
+                            .j = j,
+                        };
+                    }
+                    if (candidate) |nn_candidate| {
+                        if (@popCount(nn_cell) < @popCount(nn_candidate)) {
+                            candidate = nn_cell;
+                            i_pos = i;
+                            j_pos = j;
+                        }
+                    } else {
+                        candidate = nn_cell;
+                        i_pos = i;
+                        j_pos = j;
+                    }
+                }
+            }
+        }
+        if (candidate == null) {
+            return null;
+        }
+        return .{ .candidate = candidate.?, .i = i_pos.?, .j = j_pos.? };
     }
 
-    pub fn findCandidates(sudoku: *Sudoku, i: usize, j: usize) ?u9 {
+    pub fn findCandidates(sudoku: *Sudoku, i: usize, j: usize) ?CandidateSet {
         if (sudoku.board[i][j] != 0) {
             return null;
         }
@@ -98,20 +135,32 @@ pub const Sudoku = struct {
         return ~mask;
     }
 
-    fn updateAllCandidate(sudoku: *Sudoku) [9][9]u9 {
+    fn updateAllCandidate(sudoku: *Sudoku) [9][9]?CandidateSet {
         for (&sudoku.candidates, 0..) |*line, i| {
             line: for (line, 0..) |*cell, j| {
-                if (cell.* == 0) {
+                if (cell.* == null) {
                     continue :line;
                 }
-                cell.* = sudoku.findCandidates(i, j) orelse 0;
+                cell.* = sudoku.findCandidates(i, j) orelse null;
             }
         }
         return sudoku.candidates;
     }
 
-    pub fn solve(sudoku: *Sudoku) []const u8 {
+    pub fn solve(sudoku: *Sudoku) ![]const u8 {
         _ = sudoku.updateAllCandidate();
+        while (sudoku.findMostConstrainedCell()) |res| {
+            if (@popCount(res.candidate) == 1) {
+                sudoku.board[res.i][res.j] = std.math.log2_int(u9, res.candidate) + 1;
+                sudoku.candidates[res.i][res.j] = null;
+                _ = sudoku.updateAllCandidate();
+            } else {
+                // TODO: resolve multi candidates
+                break;
+            }
+        }
+        std.debug.print("res:", .{});
+        try sudoku.display();
         return "ans";
     }
 };
