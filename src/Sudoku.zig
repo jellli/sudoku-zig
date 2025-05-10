@@ -90,78 +90,29 @@ pub const Sudoku = struct {
         return .{ .candidate = candidate.?, .i = i_pos.?, .j = j_pos.? };
     }
 
-    pub fn findCandidates(sudoku: *Sudoku, i: usize, j: usize) ?u9 {
-        if (sudoku.board[i][j] != 0) {
-            return null;
-        }
+    pub fn getSeenByCell(i: usize, j: usize) [9 + 9 + 9][2]usize {
         const box_i = (i / 3) * 3;
         const box_j = (j / 3) * 3;
-        const values = [9 + 9 + 9]u8{
-            // Rows
-            sudoku.board[i][0],
-            sudoku.board[i][1],
-            sudoku.board[i][2],
-            sudoku.board[i][3],
-            sudoku.board[i][4],
-            sudoku.board[i][5],
-            sudoku.board[i][6],
-            sudoku.board[i][7],
-            sudoku.board[i][8],
-            // Columns
-            sudoku.board[0][j],
-            sudoku.board[1][j],
-            sudoku.board[2][j],
-            sudoku.board[3][j],
-            sudoku.board[4][j],
-            sudoku.board[5][j],
-            sudoku.board[6][j],
-            sudoku.board[7][j],
-            sudoku.board[8][j],
-            // Box
-            sudoku.board[box_i][box_j],
-            sudoku.board[box_i][box_j + 1],
-            sudoku.board[box_i][box_j + 2],
 
-            sudoku.board[box_i + 1][box_j],
-            sudoku.board[box_i + 1][box_j + 1],
-            sudoku.board[box_i + 1][box_j + 2],
-
-            sudoku.board[box_i + 2][box_j],
-            sudoku.board[box_i + 2][box_j + 1],
-            sudoku.board[box_i + 2][box_j + 2],
-        };
-        var mask: u9 = 0;
-        for (values, 0..) |value, index| {
-            if (value == 0 or std.mem.indexOfScalar(u8, &values, value) != index) {
-                continue;
-            }
-            mask += @as(u9, 1) << @intCast(value - 1);
-        }
-        return ~mask;
-    }
-
-    fn updateRelativeCandidate(sudoku: *Sudoku, c_i: u4, c_j: u4) void {
-        const box_i = (c_i / 3) * 3;
-        const box_j = (c_j / 3) * 3;
-        const pos_list = [9 + 9 + 9]struct { u4, u4 }{
-            .{ c_i, 0 },
-            .{ c_i, 1 },
-            .{ c_i, 2 },
-            .{ c_i, 3 },
-            .{ c_i, 4 },
-            .{ c_i, 5 },
-            .{ c_i, 6 },
-            .{ c_i, 7 },
-            .{ c_i, 8 },
-            .{ 0, c_j },
-            .{ 1, c_j },
-            .{ 2, c_j },
-            .{ 3, c_j },
-            .{ 4, c_j },
-            .{ 5, c_j },
-            .{ 6, c_j },
-            .{ 7, c_j },
-            .{ 8, c_j },
+        return [9 + 9 + 9][2]usize{
+            .{ i, 0 },
+            .{ i, 1 },
+            .{ i, 2 },
+            .{ i, 3 },
+            .{ i, 4 },
+            .{ i, 5 },
+            .{ i, 6 },
+            .{ i, 7 },
+            .{ i, 8 },
+            .{ 0, j },
+            .{ 1, j },
+            .{ 2, j },
+            .{ 3, j },
+            .{ 4, j },
+            .{ 5, j },
+            .{ 6, j },
+            .{ 7, j },
+            .{ 8, j },
             .{ box_i, box_j },
             .{ box_i, box_j + 1 },
             .{ box_i, box_j + 2 },
@@ -172,11 +123,32 @@ pub const Sudoku = struct {
             .{ box_i + 2, box_j + 1 },
             .{ box_i + 2, box_j + 2 },
         };
+    }
+
+    pub fn findCandidates(sudoku: *Sudoku, i: usize, j: usize) ?u9 {
+        if (sudoku.board[i][j] != 0) {
+            return null;
+        }
+        const pos_list = getSeenByCell(i, j);
+        var values: [9 + 9 + 9]u8 = undefined;
+        for (pos_list, 0..) |pos, index| {
+            values[index] = sudoku.board[pos[0]][pos[1]];
+        }
+        var mask: u9 = 0;
+        for (values, 0..) |value, index| {
+            if (value == 0 or std.mem.indexOfScalar(u8, &values, value) != index) {
+                continue;
+            }
+            mask += @as(u9, 1) << @intCast(value - 1);
+        }
+        return ~mask;
+    }
+
+    fn updateSeenCandidate(sudoku: *Sudoku, i: u4, j: u4) void {
+        const pos_list = getSeenByCell(i, j);
         for (pos_list) |pos| {
-            const i = pos[0];
-            const j = pos[1];
-            if (sudoku.board[i][j] == 0) {
-                sudoku.candidates[i][j].mask = sudoku.findCandidates(i, j).?;
+            if (sudoku.board[pos[0]][pos[1]] == 0) {
+                sudoku.candidates[pos[0]][pos[1]].mask = sudoku.findCandidates(pos[0], pos[1]).?;
             }
         }
     }
@@ -196,7 +168,7 @@ pub const Sudoku = struct {
         while (try sudoku.findMostConstrainedCell()) |res| {
             if (res.candidate.count() == 1) {
                 sudoku.board[res.i][res.j] = std.math.log2_int(u9, res.candidate.mask) + 1;
-                sudoku.updateRelativeCandidate(res.i, res.j);
+                sudoku.updateSeenCandidate(res.i, res.j);
             } else {
                 // TODO: resolve multi candidates
                 break;
