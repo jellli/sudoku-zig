@@ -160,9 +160,10 @@ pub const Sudoku = struct {
 
     pub fn solve(sudoku: *Sudoku) !void {
         while (try sudoku.findMostConstrainedCell()) |cell| {
-            if (sudoku.board[cell.i][cell.j].Candidate.count() == 1) {
-                sudoku.board[cell.i][cell.j] = .{ .Filled = std.math.log2_int(u9, sudoku.board[cell.i][cell.j].Candidate.mask) + 1 };
-                sudoku.removeCandidateFromSeenCell(sudoku.board[cell.i][cell.j].Filled, cell.i, cell.j);
+            const current_cell = &sudoku.board[cell.i][cell.j];
+            if (current_cell.*.Candidate.count() == 1) {
+                current_cell.* = .{ .Filled = std.math.log2_int(u9, current_cell.*.Candidate.mask) + 1 };
+                sudoku.removeCandidateFromSeenCell(current_cell.*.Filled, cell.i, cell.j);
             } else {
                 try stdout.print("Can't solve!\n", .{});
                 break;
