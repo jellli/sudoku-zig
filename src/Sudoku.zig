@@ -158,17 +158,15 @@ pub const Sudoku = struct {
         }
     }
 
-    pub fn solve(sudoku: *Sudoku) ![]const u8 {
+    pub fn solve(sudoku: *Sudoku) !void {
         while (try sudoku.findMostConstrainedCell()) |cell| {
             if (sudoku.board[cell.i][cell.j].Candidate.count() == 1) {
                 sudoku.board[cell.i][cell.j] = .{ .Filled = std.math.log2_int(u9, sudoku.board[cell.i][cell.j].Candidate.mask) + 1 };
                 sudoku.removeCandidateFromSeenCell(sudoku.board[cell.i][cell.j].Filled, cell.i, cell.j);
             } else {
-                // 取box row column 差集
-                // res.candidate.differenceWith();
+                try stdout.print("Can't solve!\n", .{});
                 break;
             }
         }
-        return "ans";
     }
 };

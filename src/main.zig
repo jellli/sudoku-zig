@@ -2,8 +2,14 @@ const std = @import("std");
 const Sudoku = @import("Sudoku.zig").Sudoku;
 
 pub fn main() !void {
-    var sudoku = try Sudoku.parse("000080000823107496000000008948002001075000600601049820080010902000763000510928074");
+    var buffer: [512]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    const allocator = fba.allocator();
 
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
+
+    var sudoku = try Sudoku.parse(args[1]);
     var timer = try std.time.Timer.start();
     const start = timer.lap();
 
