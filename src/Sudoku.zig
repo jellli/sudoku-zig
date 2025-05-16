@@ -29,6 +29,7 @@ pub const Sudoku = struct {
                 else => return error.InvalidBytes,
             }
         }
+        sudoku.updateAllCandidate();
 
         return sudoku;
     }
@@ -128,22 +129,14 @@ pub const Sudoku = struct {
             return null;
         }
         const pos_list = getSeenByCell(i, j);
-        var values: [9 + 9 + 9]u8 = undefined;
-        for (pos_list, 0..) |pos, index| {
-            if (sudoku.board[pos[0]][pos[1]] == .Filled) {
-                values[index] = sudoku.board[pos[0]][pos[1]].Filled;
-            } else {
-                values[index] = 0;
+        var bit = CandidateBitSet.initEmpty();
+        for (pos_list) |pos| {
+            const cell = sudoku.board[pos[0]][pos[1]];
+            if (cell == .Filled) {
+                bit.set(cell.Filled - 1);
             }
         }
-        var mask: u9 = 0;
-        for (values, 0..) |value, index| {
-            if (value == 0 or std.mem.indexOfScalar(u8, &values, value) != index) {
-                continue;
-            }
-            mask |= @as(u9, 1) << @intCast(value - 1);
-        }
-        return ~mask;
+        return ~bit.mask;
     }
 
     fn removeCandidateFromSeenCell(sudoku: *Sudoku, value: u8, i: usize, j: usize) void {
@@ -166,7 +159,6 @@ pub const Sudoku = struct {
     }
 
     pub fn solve(sudoku: *Sudoku) ![]const u8 {
-        sudoku.updateAllCandidate();
         while (try sudoku.findMostConstrainedCell()) |cell| {
             if (sudoku.board[cell.i][cell.j].Candidate.count() == 1) {
                 sudoku.board[cell.i][cell.j] = .{ .Filled = std.math.log2_int(u9, sudoku.board[cell.i][cell.j].Candidate.mask) + 1 };
