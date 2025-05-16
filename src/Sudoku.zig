@@ -129,14 +129,14 @@ pub const Sudoku = struct {
             return null;
         }
         const pos_list = getSeenByCell(i, j);
-        var bit = CandidateBitSet.initEmpty();
+        var candidate = CandidateBitSet.initFull();
         for (pos_list) |pos| {
             const cell = sudoku.board[pos[0]][pos[1]];
             if (cell == .Filled) {
-                bit.set(cell.Filled - 1);
+                candidate.unset(cell.Filled - 1);
             }
         }
-        return ~bit.mask;
+        return candidate.mask;
     }
 
     fn removeCandidateFromSeenCell(sudoku: *Sudoku, value: u8, i: usize, j: usize) void {
