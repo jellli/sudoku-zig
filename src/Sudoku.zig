@@ -1,16 +1,16 @@
 const std = @import("std");
 const IntegerBitSet = std.bit_set.IntegerBitSet;
+const stdout = std.io.getStdOut().writer();
 
-const CandidateSet = IntegerBitSet(9);
-const CandidatePos = struct {
-    candidate: CandidateSet,
-    i: u4,
-    j: u4,
+const CandidateBitSet = IntegerBitSet(9);
+
+const Cell = union(enum) {
+    Filled: u8,
+    Candidate: CandidateBitSet,
 };
 
 pub const Sudoku = struct {
-    board: [9][9]u4,
-    candidates: [9][9]CandidateSet,
+    board: [9][9]Cell,
 
     pub fn parse(input: []const u8) !Sudoku {
         var sudoku: Sudoku = undefined;
@@ -18,79 +18,77 @@ pub const Sudoku = struct {
             return error.TooFewBytes;
         }
 
-        for (input, 0..) |value, index| switch (value) {
-            '0'...'9' => {
-                const i: usize = index / 9;
-                const j: usize = index % 9;
-                sudoku.board[i][j] = @intCast(value - '0');
-            },
-            else => return error.InvalidBytes,
-        };
+        for (input, 0..) |value, index| {
+            const i: usize = index / 9;
+            const j: usize = index % 9;
+            switch (value) {
+                '1'...'9' => sudoku.board[i][j] = .{ .Filled = @intCast(value - '0') },
+                '0' => sudoku.board[i][j] = .{
+                    .Candidate = CandidateBitSet.initFull(),
+                },
+                else => return error.InvalidBytes,
+            }
+        }
 
         return sudoku;
     }
 
     pub fn display(sudoku: *Sudoku) !void {
-        const writer = std.io.getStdOut().writer();
         for (sudoku.board, 0..) |line, i| {
-            try writer.print("\n", .{});
+            try stdout.print("\n", .{});
             if (i % 3 == 0) {
-                try writer.print("-------------\n", .{});
+                try stdout.print("-------------\n", .{});
             }
             for (line, 0..) |cell, j| {
                 if (j % 3 == 0) {
-                    try writer.print("|", .{});
+                    try stdout.print("|", .{});
                 }
-
-                try writer.print("{any}", .{cell});
+                if (cell == .Filled) {
+                    try stdout.print("{d}", .{cell.Filled});
+                } else {
+                    std.debug.print("{d}", .{0});
+                }
 
                 if (j == line.len - 1) {
-                    try writer.print("|", .{});
+                    try stdout.print("|", .{});
                 }
             }
         }
-        try writer.print("\n-------------\n", .{});
+        try stdout.print("\n-------------\n", .{});
     }
 
-    pub fn findMostConstrainedCell(sudoku: *Sudoku) !?CandidatePos {
-        var candidate: ?CandidateSet = null;
-        var i_pos: ?u4 = null;
-        var j_pos: ?u4 = null;
-        for (sudoku.candidates, 0..) |line, i| {
+    const Pos = struct { i: usize, j: usize };
+    fn findMostConstrainedCell(sudoku: *Sudoku) !?Pos {
+        var best: ?Pos = null;
+        for (sudoku.board, 0..) |line, i| {
             for (line, 0..) |cell, j| {
-                if (sudoku.board[i][j] != 0) {
-                    continue;
-                }
-                if (cell.count() == 0) {
-                    return error.NoCandidate;
-                }
-                if (cell.count() == 1) {
-                    return .{
-                        .candidate = cell,
-                        .i = @truncate(i),
-                        .j = @truncate(j),
-                    };
-                }
-                if (candidate) |nn_candidate| {
-                    if (cell.count() < nn_candidate.count()) {
-                        candidate = cell;
-                        i_pos = @truncate(i);
-                        j_pos = @truncate(j);
-                    }
-                } else {
-                    candidate = cell;
-                    i_pos = @truncate(i);
-                    j_pos = @truncate(j);
+                switch (cell) {
+                    .Candidate => |candidate| {
+                        const count = candidate.count();
+                        if (count == 0) {
+                            return error.NoCandidate;
+                        }
+                        if (count == 1) {
+                            return .{
+                                .i = i,
+                                .j = j,
+                            };
+                        }
+                        if (best == null or count < sudoku.board[best.?.i][best.?.j].Candidate.count()) {
+                            best = .{
+                                .i = i,
+                                .j = j,
+                            };
+                        }
+                    },
+                    else => continue,
                 }
             }
         }
-        if (candidate == null) {
-            return null;
-        }
-        return .{ .candidate = candidate.?, .i = i_pos.?, .j = j_pos.? };
+        return best;
     }
 
-    pub fn getSeenByCell(i: usize, j: usize) [9 + 9 + 9][2]usize {
+    fn getSeenByCell(i: usize, j: usize) [9 + 9 + 9][2]usize {
         const box_i = (i / 3) * 3;
         const box_j = (j / 3) * 3;
 
@@ -125,39 +123,43 @@ pub const Sudoku = struct {
         };
     }
 
-    pub fn findCandidates(sudoku: *Sudoku, i: usize, j: usize) ?u9 {
-        if (sudoku.board[i][j] != 0) {
+    fn findCandidates(sudoku: *Sudoku, i: usize, j: usize) ?u9 {
+        if (sudoku.board[i][j] == .Filled) {
             return null;
         }
         const pos_list = getSeenByCell(i, j);
         var values: [9 + 9 + 9]u8 = undefined;
         for (pos_list, 0..) |pos, index| {
-            values[index] = sudoku.board[pos[0]][pos[1]];
+            if (sudoku.board[pos[0]][pos[1]] == .Filled) {
+                values[index] = sudoku.board[pos[0]][pos[1]].Filled;
+            } else {
+                values[index] = 0;
+            }
         }
         var mask: u9 = 0;
         for (values, 0..) |value, index| {
             if (value == 0 or std.mem.indexOfScalar(u8, &values, value) != index) {
                 continue;
             }
-            mask += @as(u9, 1) << @intCast(value - 1);
+            mask |= @as(u9, 1) << @intCast(value - 1);
         }
         return ~mask;
     }
 
-    fn updateSeenCandidate(sudoku: *Sudoku, i: u4, j: u4) void {
+    fn updateSeenCandidate(sudoku: *Sudoku, i: usize, j: usize) void {
         const pos_list = getSeenByCell(i, j);
         for (pos_list) |pos| {
-            if (sudoku.board[pos[0]][pos[1]] == 0) {
-                sudoku.candidates[pos[0]][pos[1]].mask = sudoku.findCandidates(pos[0], pos[1]).?;
+            if (sudoku.board[pos[0]][pos[1]] == .Candidate) {
+                sudoku.board[pos[0]][pos[1]].Candidate.mask = sudoku.findCandidates(pos[0], pos[1]).?;
             }
         }
     }
 
     fn updateAllCandidate(sudoku: *Sudoku) void {
-        for (&sudoku.candidates, 0..) |*line, i| {
+        for (&sudoku.board, 0..) |*line, i| {
             for (line, 0..) |*cell, j| {
-                if (sudoku.board[i][j] == 0) {
-                    cell.*.mask = sudoku.findCandidates(i, j).?;
+                if (cell.* == .Candidate) {
+                    cell.*.Candidate.mask = sudoku.findCandidates(i, j).?;
                 }
             }
         }
@@ -165,12 +167,13 @@ pub const Sudoku = struct {
 
     pub fn solve(sudoku: *Sudoku) ![]const u8 {
         sudoku.updateAllCandidate();
-        while (try sudoku.findMostConstrainedCell()) |res| {
-            if (res.candidate.count() == 1) {
-                sudoku.board[res.i][res.j] = std.math.log2_int(u9, res.candidate.mask) + 1;
-                sudoku.updateSeenCandidate(res.i, res.j);
+        while (try sudoku.findMostConstrainedCell()) |cell| {
+            if (sudoku.board[cell.i][cell.j].Candidate.count() == 1) {
+                sudoku.board[cell.i][cell.j] = .{ .Filled = std.math.log2_int(u9, sudoku.board[cell.i][cell.j].Candidate.mask) + 1 };
+                sudoku.updateSeenCandidate(cell.i, cell.j);
             } else {
-                // TODO: resolve multi candidates
+                // 取box row column 差集
+                // res.candidate.differenceWith();
                 break;
             }
         }
