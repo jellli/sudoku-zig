@@ -146,11 +146,11 @@ pub const Sudoku = struct {
         return ~mask;
     }
 
-    fn updateSeenCandidate(sudoku: *Sudoku, i: usize, j: usize) void {
+    fn removeCandidateFromSeenCell(sudoku: *Sudoku, value: u8, i: usize, j: usize) void {
         const pos_list = getSeenByCell(i, j);
         for (pos_list) |pos| {
             if (sudoku.board[pos[0]][pos[1]] == .Candidate) {
-                sudoku.board[pos[0]][pos[1]].Candidate.mask = sudoku.findCandidates(pos[0], pos[1]).?;
+                sudoku.board[pos[0]][pos[1]].Candidate.unset(value - 1);
             }
         }
     }
@@ -170,7 +170,7 @@ pub const Sudoku = struct {
         while (try sudoku.findMostConstrainedCell()) |cell| {
             if (sudoku.board[cell.i][cell.j].Candidate.count() == 1) {
                 sudoku.board[cell.i][cell.j] = .{ .Filled = std.math.log2_int(u9, sudoku.board[cell.i][cell.j].Candidate.mask) + 1 };
-                sudoku.updateSeenCandidate(cell.i, cell.j);
+                sudoku.removeCandidateFromSeenCell(sudoku.board[cell.i][cell.j].Filled, cell.i, cell.j);
             } else {
                 // 取box row column 差集
                 // res.candidate.differenceWith();
